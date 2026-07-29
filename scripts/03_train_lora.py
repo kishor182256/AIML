@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 from utils.config import load_config, normalize_training_config
-from utils.dataset import format_chat_dataset, load_chat_dataset, select_demo_samples
+from utils.dataset import format_chat_dataset, load_chat_dataset
 from utils.modeling import attach_lora, load_causal_lm
 from utils.tokenization import load_tokenizer, tokenize_text
 
@@ -37,7 +37,8 @@ def main():
     print("\nLoading dataset...")
     dataset = load_chat_dataset(train_file, test_file)
     dataset = format_chat_dataset(dataset, tokenizer)
-    dataset = select_demo_samples(dataset, sample_size=50)
+    print(f"Train samples: {len(dataset['train']):,}")
+    print(f"Test samples: {len(dataset['test']):,}")
 
     print("\nFirst formatted sample:")
     print(dataset["train"][0]["text"][:300])

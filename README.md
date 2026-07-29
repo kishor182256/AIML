@@ -2,8 +2,6 @@
 
 Production-oriented starter project for preparing chat data, fine-tuning instruction models with LoRA or QLoRA, evaluating adapters, merging adapters into base models, and exporting models for local inference.
 
-The current LoRA training script is configured for a small demo run by selecting 50 train and 50 test samples.
-
 ## Project Structure
 
 ```text
@@ -76,15 +74,26 @@ Download and inspect the dataset:
 python scripts/01_download_dataset.py
 ```
 
-Prepare JSONL files:
+Prepare the full UltraChat SFT JSONL files:
 
 ```powershell
 python scripts/02_prepare_dataset.py
 ```
 
+Use `--max-samples 50` only when you explicitly want a tiny smoke test.
+
 Generated files under `data/raw/` and `data/processed/` are ignored by Git because they can be large.
 
-## LoRA Demo Training
+On a fresh RunPod or Linux clone, run:
+
+```bash
+cd /workspace/AIML
+pip install -r requirements.txt
+python scripts/02_prepare_dataset.py
+python scripts/03_train_lora.py
+```
+
+## LoRA Training
 
 Check `configs/lora.yaml`, then run:
 
@@ -92,14 +101,7 @@ Check `configs/lora.yaml`, then run:
 python scripts/03_train_lora.py
 ```
 
-The script currently limits training to:
-
-```python
-dataset["train"].select(range(50))
-dataset["test"].select(range(50))
-```
-
-This is intended for fast demo validation. Increase or remove the sample limit for real training.
+The script trains on the full processed files configured in `configs/lora.yaml`.
 
 ## QLoRA
 
