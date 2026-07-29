@@ -1,0 +1,36 @@
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and outputs
+logs/
+output/
+outputs/
+runs/
+wandb/
+
+# Model artifacts
+adapters/
+merged_models/
+*.bin
+*.safetensors
+*.gguf
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
