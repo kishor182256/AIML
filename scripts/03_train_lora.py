@@ -1,142 +1,86 @@
-from datasets import load_dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    TrainingArguments,
-)
-import yaml
-from peft import (
-    LoraConfig,
-    get_peft_model,
-)
+from pathlib import Path
+import sys
 
+from transformers import TrainingArguments
 from trl import SFTTrainer
 
-# --------------------
-# Configuration
-# --------------------
-# MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
 
-# OUTPUT_DIR = "adapters/qwen-lora"
+from utils.config import load_config, normalize_training_config
+from utils.dataset import format_chat_dataset, load_chat_dataset, select_demo_samples
+from utils.modeling import attach_lora, load_causal_lm
+from utils.tokenization import load_tokenizer, tokenize_text
 
-# MAX_SEQ_LENGTH = 2048
 
-# BATCH_SIZE = 2
+CONFIG_PATH = PROJECT_ROOT / "configs" / "lora.yaml"
 
-# LEARNING_RATE = 2e-4
 
-# EPOCHS = 1
+def main():
+    config = normalize_training_config(load_config(CONFIG_PATH))
 
-# --------------------
-# Load Dataset
-# --------------------
-print("Loading dataset...")
+    model_name = config["model"]["name"]
+    output_dir = config["training"]["output_dir"]
+    batch_size = config["training"]["batch_size"]
+    learning_rate = config["training"]["learning_rate"]
+    epochs = config["training"]["epochs"]
+    max_seq_length = config["training"]["max_seq_length"]
+    train_file = str(PROJECT_ROOT / config["dataset"]["train"])
+    test_file = str(PROJECT_ROOT / config["dataset"]["test"])
 
-def load_config(config_path="configs/lora.yaml"):
-    """
-    Load the YAML configuration file.
-    """
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    print("Configuration loaded.")
+    print(config)
 
-    return config
+    print("\nLoading tokenizer...")
+    tokenizer = load_tokenizer(model_name)
 
-config = load_config()
+    print("\nLoading dataset...")
+    dataset = load_chat_dataset(train_file, test_file)
+    dataset = format_chat_dataset(dataset, tokenizer)
+    dataset = select_demo_samples(dataset, sample_size=50)
 
-MODEL_NAME = config["model"]["name"]
+    print("\nFirst formatted sample:")
+    print(dataset["train"][0]["text"][:300])
 
-OUTPUT_DIR = config["training"]["output_dir"]
-BATCH_SIZE = config["training"]["batch_size"]
-LEARNING_RATE = config["training"]["learning_rate"]
-EPOCHS = config["training"]["epochs"]
-MAX_SEQ_LENGTH = config["training"]["max_seq_length"]
+    sample = dataset["train"][0]
+    tokens = tokenize_text(
+        sample["text"],
+        tokenizer=tokenizer,
+        max_seq_length=max_seq_length,
+    )
+    print("\nSample token count:", len(tokens["input_ids"]))
 
-print(config)
+    print("\nLoading model...")
+    model = load_causal_lm(model_name)
+    print("Model loaded successfully.")
 
-def format_chat(example):
-    """
-    Convert a conversation into Qwen's chat format.
-    """
-    text = tokenizer.apply_chat_template(
-        example["messages"],
-        tokenize=False,
-        add_generation_prompt=False,
+    print("\nAttaching LoRA...")
+    model = attach_lora(model, config["lora"])
+    print("LoRA attached successfully.")
+    model.print_trainable_parameters()
+
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=epochs,
+        per_device_train_batch_size=batch_size,
+        learning_rate=learning_rate,
+        logging_dir="logs",
+        logging_steps=10,
+        save_strategy="epoch",
+        report_to="none",
     )
 
-    return {"text": text}
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["test"],
+        args=training_args,
+    )
 
-dataset = load_dataset(
-    "json",
-    data_files={
-        "train": "data/processed/train.jsonl",
-        "test": "data/processed/test.jsonl",
-    },
-)
+    trainer.train()
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
 
-dataset = dataset.map(format_chat)
-print(dataset["train"][0]["text"][:300])
 
-# --------------------
-# Load Tokenizer
-# --------------------
-# print("Loading tokenizer...")
-
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-
-# print("Tokenizer loaded:", tokenizer.name_or_path)
-
-# --------------------
-# Test the tokenizer
-# --------------------
-sample = dataset["train"][0]
-
-# print("\nFirst sample:")
-# print(sample)
-
-formatted_text = tokenizer.apply_chat_template(
-    sample["messages"],
-    tokenize=False,
-    add_generation_prompt=False,
-)
-
-# print("\nFormatted Conversation:")
-# print(formatted_text)
-
-tokens = tokenizer(
-    formatted_text,
-    truncation=True,
-    max_length=MAX_SEQ_LENGTH,
-)
-
-# print("\nToken Count:", len(tokens["input_ids"]))
-
-# print("\nFirst 20 Token IDs:")
-# print(tokens["input_ids"][:20])
-
-# print("\nDecoded Text:")
-# print(tokenizer.decode(tokens["input_ids"]))
-print("\nLoading Qwen Model...")
-
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-)
-
-print("Model loaded successfully!")
-
-print("\nAttaching LoRA...")
-
-lora_config = LoraConfig(
-    r=config["lora"]["r"],
-    lora_alpha=config["lora"]["alpha"],
-    lora_dropout=config["lora"]["dropout"],
-    bias=config["lora"]["bias"],
-    task_type=config["lora"]["task_type"],
-)
-
-model = get_peft_model(model, lora_config)
-
-print("LoRA attached successfully!")
-model.print_trainable_parameters()
+if __name__ == "__main__":
+    main()
