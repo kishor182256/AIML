@@ -1,0 +1,20 @@
+model:
+  name: Qwen/Qwen2.5-3B-Instruct
+
+training:
+  output_dir: adapters/qwen-lora
+  batch_size: 2
+  learning_rate: 2e-4
+  epochs: 1
+  max_seq_length: 2048
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
+
+dataset:
+  train: data/processed/train.jsonl
+  test: data/processed/test.jsonl

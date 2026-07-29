@@ -21,8 +21,10 @@ output/
 outputs/
 runs/
 wandb/
+data/
 
 # Model artifacts
+models/
 adapters/
 merged_models/
 *.bin
